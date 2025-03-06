@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  clerkUserId   String    @unique 
+  email         String    @unique
+  name          String?
+  imageUrl      String?
+  industry      String?    
+  industryInsight IndustryInsight? @relation(fields: [industry], references: [industry])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Profile fields
+  bio           String?
+  experience    Int?      
+  
+  // Relations
+  skills        String[]  
+  assessments   Assessment[]
+  resume        Resume?
+  coverLetter   CoverLetter[]
+}
+
+model Assessment {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  quizScore     Float     
+  questions     Json[]    
+  category      String    
+  improvementTip String?  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model Resume {
+  id          String    @id @default(cuid())
+  userId      String    @unique    
+  user        User      @relation(fields: [userId], references: [id])
+  content     String    @db.Text 
+  atsScore    Float?
+  feedback    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model CoverLetter {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  content         String    // Markdown content
+  jobDescription  String?
+  companyName     String    // Name of the company applying to
+  jobTitle        String    // Position applying for
+  status          String    @default("draft") 
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+// Combined Industry Trends and Salary Insights
+model IndustryInsight {
+  id            String    @id @default(cuid())
+  industry      String    @unique  
+  
+  // Users in this industry
+  users         User[]
+  
+  // Salary data
+  salaryRanges  Json[]    // Array of { role: string, min: float, max: float, median: float, location: string? }
+  
+  // Industry trends
+  growthRate    Float     
+  demandLevel   DemandLevel    
+  topSkills     String[] 
+  
+  // Market conditions
+  marketOutlook MarketOutlook   
+  keyTrends     String[]  
+  
+  // Learning suggestions
+  recommendedSkills String[]  
+  
+  lastUpdated   DateTime  @default(now())
+  nextUpdate    DateTime  
+
+  @@index([industry])
+}
+
+
+
+enum DemandLevel {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+
+enum MarketOutlook {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
