@@ -1,10 +1,12 @@
-
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "../components/theme-provider";
 import Header from "@/components/header";
 import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
+import { Toaster } from "sonner";
+import { Facebook, Instagram, Linkedin, Mail, Twitter } from "lucide-react";
+import Link from "next/link";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -17,7 +19,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <ClerkProvider apperance={{
+    <ClerkProvider appearance={{
       baseTheme: dark,
     }}>
     <html lang="en" suppressHydrationWarning>
@@ -27,21 +29,59 @@ export default function RootLayout({ children }) {
         {/* header */}
         <Header/>
           <main className="min-h-screen">{children}</main>
-
+          <Toaster richColors/>
 
           {/* footer */}
-          <footer className="bg-muted/50 py-12">
-            <div className="container mx-auto px-4 text-center text-gray-200">
-              <p>
-                Made By team - Arambh
-              </p>
+          <footer className="px-8 bg-gradient-to-b from-background/95 via-background/90 to-background/80 border-t">
+            <div className="container mx-auto px-10 py-12 md:py-16">
+              <div className="grid grid-cols-1 gap-12 md:grid-cols-3 text-center md:text-left">
+                <div className="space-y-1">
+                  <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent "> SensAI </h1>
+                  {/* <h3 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                     AI Career Coach
+                  </h3> */}
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                  Empowering your career journey with AI-driven insights and tools.
+                  </p>
+                </div>
+
+                <div className="px-8 space-y-6">
+                  <h4 className="text-lg font-semibold text-primary">Contact Us</h4>
+                  <div className="flex items-center justify-center md:justify-start space-x-3">
+                    <Mail className="h-5 w-5 text-muted-foreground hover:text-primary transition-colors" />
+                    <span className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                      support@aicareercoach.com
+                    </span>
+                  </div>
+                </div>
+
+                <div className="px-8 space-y-6">
+                  <h4 className="text-lg font-semibold text-primary">Follow Us</h4>
+                  <div className="flex justify-center md:justify-start space-x-6">
+                    <Link href="#" className="text-muted-foreground hover:text-primary transition-all hover:-translate-y-1">
+                      <Facebook className="h-6 w-6" />
+                    </Link>
+                    <Link href="#" className="text-muted-foreground hover:text-primary transition-all hover:-translate-y-1">
+                      <Twitter className="h-6 w-6" />
+                    </Link>
+                    <Link href="#" className="text-muted-foreground hover:text-primary transition-all hover:-translate-y-1">
+                      <Instagram className="h-6 w-6" />
+                    </Link>
+                    <Link href="#" className="text-muted-foreground hover:text-primary transition-all hover:-translate-y-1">
+                      <Linkedin className="h-6 w-6" />
+                    </Link>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-12 border-t border-muted pt-8 text-center text-sm text-muted-foreground">
+                @Copyrights {new Date().getFullYear()} All rights of SensAI are reserved.
+              </div>
             </div>
           </footer>
         </ThemeProvider>
-
       </body>
     </html>
-
     </ClerkProvider>
   );
 }
