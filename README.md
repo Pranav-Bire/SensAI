@@ -92,7 +92,7 @@ A comprehensive AI-powered platform designed to assist users in their profession
 
 6. Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
 
-## 📐 Project Structure
+##  Project Structure
 
 ```
 ai-career-coach/
@@ -114,7 +114,7 @@ ai-career-coach/
 └── public/           # Static assets
 ```
 
-## 🖥️ Usage Examples
+##  Usage Examples
 
 ### Creating a Resume
 1. Navigate to the Resume Builder
