@@ -56,7 +56,7 @@ A comprehensive AI-powered platform designed to assist users in their profession
 ### Environment Setup
 1. Clone the repository
    ```bash
-   git clone https://github.com/yourusername/ai-career-coach.git
+   git clone https://github.com/Pranav-Bire/SensAI.git
    cd ai-career-coach
    ```
 
