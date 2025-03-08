@@ -2,7 +2,7 @@
 
 A comprehensive AI-powered platform designed to assist users in their professional journey, from resume building to interview preparation and beyond.
 
-![AI Career Coach]([https://github.com/Pranav-Bire/SensAI/blob/35c87828f6bbe15dc225dcdcd69af765b9bb9f3f/public/logo.png])
+![AI Career Coach](https://github.com/Pranav-Bire/SensAI/blob/95b7fb4bb4c43b979b44d61d51e558ca7f9dfcc6/public/logo.png)
 
 
 ##  Features
