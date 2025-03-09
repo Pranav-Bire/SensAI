@@ -13,6 +13,10 @@ export default async function EditCoverLetterPage({ params }) {
     redirect("/sign-in");
   }
 
+  if (!user.onboardingCompleted) {
+    redirect("/onboarding");
+  }
+
   try {
     const coverLetter = await getCoverLetter(params.id);
 

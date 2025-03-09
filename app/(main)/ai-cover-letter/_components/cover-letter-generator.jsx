@@ -16,22 +16,31 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { generateCoverLetter } from "@/actions/cover-letter";
+import { generateCoverLetter, updateCoverLetter } from "@/actions/cover-letter";
 import useFetch from "@/hooks/use-fetch";
 import { coverLetterSchema } from "@/app/lib/schema";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import MDEditor from "@uiw/react-md-editor";
 
-export default function CoverLetterGenerator() {
+export default function CoverLetterGenerator({ initialData }) {
   const router = useRouter();
+  const isEditing = !!initialData;
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset,
+    setValue,
+    watch,
   } = useForm({
     resolver: zodResolver(coverLetterSchema),
+    defaultValues: initialData || {
+      companyName: "",
+      jobTitle: "",
+      jobDescription: "",
+    },
   });
 
   const {
@@ -39,6 +48,12 @@ export default function CoverLetterGenerator() {
     fn: generateLetterFn,
     data: generatedLetter,
   } = useFetch(generateCoverLetter);
+
+  const {
+    loading: updating,
+    fn: updateLetterFn,
+    data: updatedLetter,
+  } = useFetch(updateCoverLetter);
 
   // Update content when letter is generated
   useEffect(() => {
@@ -49,11 +64,26 @@ export default function CoverLetterGenerator() {
     }
   }, [generatedLetter]);
 
+  // Handle successful update
+  useEffect(() => {
+    if (updatedLetter) {
+      toast.success("Cover letter updated successfully!");
+      router.push(`/ai-cover-letter/${updatedLetter.id}`);
+    }
+  }, [updatedLetter]);
+
   const onSubmit = async (data) => {
     try {
-      await generateLetterFn(data);
+      if (isEditing) {
+        await updateLetterFn(initialData.id, {
+          ...data,
+          content: watch("content"),
+        });
+      } else {
+        await generateLetterFn(data);
+      }
     } catch (error) {
-      toast.error(error.message || "Failed to generate cover letter");
+      toast.error(error.message || "Failed to process cover letter");
     }
   };
 
@@ -68,7 +98,6 @@ export default function CoverLetterGenerator() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Form fields remain the same */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="companyName">Company Name</Label>
@@ -114,15 +143,26 @@ export default function CoverLetterGenerator() {
               )}
             </div>
 
+            {isEditing && (
+              <div className="space-y-2">
+                <Label>Cover Letter Content</Label>
+                <MDEditor
+                  value={watch("content") || initialData.content}
+                  onChange={(value) => setValue("content", value)}
+                  height={400}
+                />
+              </div>
+            )}
+
             <div className="flex justify-end">
-              <Button type="submit" disabled={generating}>
-                {generating ? (
+              <Button type="submit" disabled={generating || updating}>
+                {generating || updating ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating...
+                    {isEditing ? "Updating..." : "Generating..."}
                   </>
                 ) : (
-                  "Generate Cover Letter"
+                  isEditing ? "Update Cover Letter" : "Generate Cover Letter"
                 )}
               </Button>
             </div>

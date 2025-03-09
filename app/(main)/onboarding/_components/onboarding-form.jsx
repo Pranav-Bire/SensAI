@@ -59,6 +59,7 @@ const OnboardingForm = ({ industries }) => {
       await updateUserFn({
         ...values,
         industry: formattedIndustry,
+        onboardingCompleted: true, 
       });
     } catch (error) {
       console.error("Onboarding error:", error);
@@ -198,7 +199,7 @@ const OnboardingForm = ({ industries }) => {
               {updateLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Taking You ON...
+                  Saving...
                 </>
               ) : (
                 "Complete Profile"

@@ -3,10 +3,10 @@
 import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { revalidatePath } from "next/cache";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
 
 export async function generateCoverLetter(data) {
   const { userId } = await auth();
@@ -44,8 +44,6 @@ export async function generateCoverLetter(data) {
     Format the letter in markdown.
   `;
 
-
-
   try {
     const result = await model.generateContent(prompt);
     const content = result.response.text().trim();
@@ -68,8 +66,6 @@ export async function generateCoverLetter(data) {
   }
 }
 
-
-
 export async function getCoverLetters() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -90,8 +86,6 @@ export async function getCoverLetters() {
   });
 }
 
-
-
 export async function getCoverLetter(id) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -110,8 +104,6 @@ export async function getCoverLetter(id) {
   });
 }
 
-
-
 export async function deleteCoverLetter(id) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -128,4 +120,37 @@ export async function deleteCoverLetter(id) {
       userId: user.id,
     },
   });
-};
+}
+
+export async function updateCoverLetter(id, data) {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const user = await db.user.findUnique({
+    where: { clerkUserId: userId },
+  });
+
+  if (!user) throw new Error("User not found");
+
+  try {
+    const coverLetter = await db.coverLetter.update({
+      where: {
+        id,
+        userId: user.id,
+      },
+      data: {
+        content: data.content,
+        jobDescription: data.jobDescription,
+        companyName: data.companyName,
+        jobTitle: data.jobTitle,
+        status: "completed",
+      },
+    });
+
+    revalidatePath("/ai-cover-letter");
+    return coverLetter;
+  } catch (error) {
+    console.error("Error updating cover letter:", error.message);
+    throw new Error("Failed to update cover letter");
+  }
+}

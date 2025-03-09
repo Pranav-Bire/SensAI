@@ -27,6 +27,7 @@ model User {
   assessments   Assessment[]
   resume        Resume?
   coverLetter   CoverLetter[]
+  onboardingCompleted Boolean @default(false)
 }
 
 model Assessment {

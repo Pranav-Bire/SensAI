@@ -4,11 +4,15 @@
 import Link from "next/link";
 import { Button } from "./ui/button";
 import Image from "next/image";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 
 const HeroSection = () => {
 
 const imageRef = useRef(null);
+const { isSignedIn, isLoaded } = useAuth();
+const router = useRouter();
 
 
 useEffect(() => {
@@ -31,6 +35,17 @@ window.addEventListener("scroll", handleScroll);
 return () => window.removeEventListener("scroll", handleScroll);
 
 }, []);
+
+const handleKnowMoreClick = (e) => {
+    e.preventDefault();
+    if (isLoaded) {
+      if (isSignedIn) {
+        router.push("/dashboard");
+      } else {
+        router.push("/onboarding");
+      }
+    }
+  };
 
     return (
         <section className="w-full pt-36 md:pt-48 pb-10">
@@ -56,9 +71,14 @@ return () => window.removeEventListener("scroll", handleScroll);
                     </Link>
 
 
-                    <Link href="/dashboard">
-                        <Button size="lg" className="px-8" variant="outline"> Know More</Button>
-                    </Link>
+                    <Button 
+                        size="lg" 
+                        className="px-8" 
+                        variant="outline"
+                        onClick={handleKnowMoreClick}
+                    >
+                        Know More
+                    </Button>
                 </div>
 
 
