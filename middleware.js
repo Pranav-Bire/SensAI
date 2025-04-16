@@ -1,6 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { db } from "@/lib/prisma";
 
 const isProtectedRoute = createRouteMatcher([
   '/dashboard(.*)',
@@ -25,19 +24,20 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   try {
-    // Check if user exists and has completed onboarding
-    const user = await db.user.findUnique({
-      where: { clerkUserId: userId },
-      select: { onboardingCompleted: true },
-    });
+    // Check if user has completed onboarding using API instead of direct Prisma access
+    const onboardingStatus = await fetch(new URL("/api/user/onboarding-status", req.url), {
+      headers: {
+        cookie: req.headers.get("cookie") || "",
+      },
+    }).then(res => res.json());
 
-    // If user doesn't exist, create them and redirect to onboarding
-    if (!user) {
+    // If API indicates error or user doesn't exist
+    if (onboardingStatus.error) {
       return NextResponse.redirect(new URL("/onboarding", req.url));
     }
 
     // If user hasn't completed onboarding
-    if (!user.onboardingCompleted) {
+    if (!onboardingStatus.completed) {
       // If trying to access any protected route except onboarding, redirect to onboarding
       if (!req.nextUrl.pathname.startsWith("/onboarding")) {
         return NextResponse.redirect(new URL("/onboarding", req.url));

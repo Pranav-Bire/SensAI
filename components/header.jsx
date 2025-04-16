@@ -3,7 +3,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import React from 'react';
 import { Button } from './ui/button';
-import { ChevronDown, FileText, LayoutDashboard, PenBox, StarIcon } from 'lucide-react';
+import { ChevronDown, FileText, LayoutDashboard, PenBox, StarIcon, Briefcase } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { checkUser } from '@/lib/checkUser';
 
@@ -36,7 +36,7 @@ const Header = async () => {
                             <DropdownMenuTrigger asChild>
                                 <Button>
                                     <StarIcon className="h-4 w-4"/>
-                                    <span className="hidden md:block">Growth Tools</span>
+                                    <span className="hidden md:block">Resume Tools</span>
                                     <ChevronDown className="h-4 w-4"/>
                                 </Button>
                             </DropdownMenuTrigger>
@@ -44,7 +44,7 @@ const Header = async () => {
                                 <DropdownMenuItem>
                                     <Link href="/resume" className="flex items-center gap-2">
                                         <FileText className="h-4 w-4"/>
-                                        <span>Built Resume</span>
+                                        <span>Build Resume</span>
                                     </Link>
                                 </DropdownMenuItem>
 
@@ -59,6 +59,20 @@ const Header = async () => {
                                     <Link href="/interview" className="flex items-center gap-2">
                                         <FileText className="h-4 w-4"/>
                                         <span>Interview Prep</span>
+                                    </Link>
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem>
+                                    <Link href="/growth-tools" className="flex items-center gap-2">
+                                        <StarIcon className="h-4 w-4"/>
+                                        <span>Resume Interview</span>
+                                    </Link>
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem>
+                                    <Link href="/job-dashboard" className="flex items-center gap-2">
+                                        <Briefcase className="h-4 w-4"/>
+                                        <span>Job Dashboard</span>
                                     </Link>
                                 </DropdownMenuItem>
                             </DropdownMenuContent>

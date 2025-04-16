@@ -4,7 +4,8 @@ import { ThemeProvider } from "../components/theme-provider";
 import Header from "@/components/header";
 import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
-import { Toaster } from "sonner";
+import { Toaster as SonnerToaster } from "sonner";
+import { Toaster } from "@/components/ui/toaster";
 import { Facebook, Instagram, Linkedin, Mail, Twitter } from "lucide-react";
 import Link from "next/link";
 
@@ -29,7 +30,8 @@ export default function RootLayout({ children }) {
         {/* header */}
         <Header/>
           <main className="min-h-screen">{children}</main>
-          <Toaster richColors/>
+          <SonnerToaster richColors/>
+          <Toaster />
 
           {/* footer */}
           <footer className="px-8 bg-gradient-to-b from-background/95 via-background/90 to-background/80 border-t">

@@ -67,6 +67,24 @@ export async function updateUser(data) {
   }
 }
 
+export async function getUser() {
+  const { userId } = await auth();
+  if (!userId) return null;
+
+  try {
+    const user = await db.user.findUnique({
+      where: {
+        clerkUserId: userId,
+      },
+    });
+
+    return user;
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    return null;
+  }
+}
+
 export async function getUserOnboardingStatus() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");

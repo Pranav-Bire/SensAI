@@ -27,6 +27,7 @@ model User {
   assessments   Assessment[]
   resume        Resume?
   coverLetter   CoverLetter[]
+  savedJobs     SavedJob[]
   onboardingCompleted Boolean @default(false)
 }
 
@@ -67,6 +68,30 @@ model CoverLetter {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  @@index([userId])
+}
+
+model SavedJob {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  
+  // Job details
+  jobTitle    String
+  company     String
+  location    String?
+  description String?   @db.Text
+  url         String    // Job listing URL
+  jobSource   String    @default("LinkedIn")
+  jobSkills   String[]  // Skills required for this job
+  matchPercentage Float?
+  
+  // Timestamps
+  savedAt     DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // We want to ensure a user doesn't save the same job multiple times
+  @@unique([userId, url])
   @@index([userId])
 }
 

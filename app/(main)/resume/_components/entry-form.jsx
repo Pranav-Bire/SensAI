@@ -26,7 +26,7 @@ const formatDisplayDate = (dateString) => {
 
 
 
-export function EntryForm({ type, entries, onChange }) {
+export function EntryForm({ type, entries = [], onChange }) {
   const [isAdding, setIsAdding] = useState(false);
 
   const {

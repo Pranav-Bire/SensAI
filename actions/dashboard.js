@@ -51,37 +51,51 @@ export const generateAIInsights = async (industry) => {
 }    
 
 export async function getIndustryInsights() {
-
     const { userId } = await auth();
     if (!userId) throw new Error("Unauthorized");
 
-
     const user = await db.user.findUnique({
-        where: { clerkUserId: userId }, 
+        where: { clerkUserId: userId },
         include: {
             industryInsight: true
         },
     });
 
-    if(!user) throw new Error("User not found");
+    if (!user) throw new Error("User not found");
 
-    if (!user.industryInsight) {
+    // Check if insights need to be created or updated
+    const shouldUpdate = !user.industryInsight || 
+        new Date(user.industryInsight.nextUpdate) <= new Date();
+
+    if (shouldUpdate) {
         const insights = await generateAIInsights(user.industry);
 
-        const industryInsight = await db.industryInsight.create({
-            data: {
-                industry: user.industry,
-
-                ...insights,
-                nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-              
-            },
-        });
-
-
-        return industryInsight;
+        if (!user.industryInsight) {
+            // Create new insights
+            const industryInsight = await db.industryInsight.create({
+                data: {
+                    industry: user.industry,
+                    ...insights,
+                    lastUpdated: new Date(),
+                    nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                },
+            });
+            return industryInsight;
+        } else {
+            // Update existing insights
+            const updatedInsight = await db.industryInsight.update({
+                where: {
+                    industry: user.industry,
+                },
+                data: {
+                    ...insights,
+                    lastUpdated: new Date(),
+                    nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                },
+            });
+            return updatedInsight;
+        }
     }
 
     return user.industryInsight;
-  
 }
