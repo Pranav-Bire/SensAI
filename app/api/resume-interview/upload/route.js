@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
 import { auth } from "@clerk/nextjs/server";
-// import { getGeneralIndustryList } from '@/lib/data/industryList';
+import { getGeneralIndustryList } from '@/lib/data/industryList';
 
 // Initialize Gemini AI with the API key
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '');

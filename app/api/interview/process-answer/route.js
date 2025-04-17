@@ -86,40 +86,44 @@ export async function POST(request) {
 
     try {
       // Generate analysis prompt
-      const analysisPrompt = `You are an expert technical interviewer analyzing a candidate's response.
+      const analysisPrompt = `
+      You are an expert technical interviewer analyzing a candidate's response.
+      
+      Question Asked: ${session.questions[session.questionCount - 1]}
+      
+      Candidate's Answer: ${transcription}
 
-Question Asked: ${session.questions[session.questionCount - 1]}
-
-Candidate's Answer: ${transcription}
-
-Resume Context: ${session.resumeText}
-
-Analyze this response considering the candidate's resume and provide a structured evaluation.
-
-Return ONLY a JSON object with these exact fields (no markdown, no code blocks, just the JSON):
-{
-  "technicalAccuracy": 7,
-  "problemSolving": 7,
-  "communicationClarity": 7,
-  "keyStrength": "One specific technical strength from their answer",
-  "technicalImprovement": "One specific technical aspect they should improve",
-  "confidence": 7,
-  "relevanceToResume": "How well the answer aligns with their stated experience"
-}
-
-Scores should be between 1-10. Be objective and fair in scoring.`;
+      Task: Analyze the technical depth and accuracy of this response.
+      
+      Evaluation Criteria:
+      1. Technical Accuracy: Evaluate correctness of technical concepts and implementation details
+      2. Problem-Solving: Assess their approach to technical challenges
+      3. Architecture/Design: Evaluate system design and architectural decisions if applicable
+      4. Best Practices: Check for mention of scalability, security, performance considerations
+      5. Real-world Application: Assess practical implementation knowledge
+      
+      Format your response as a JSON object with these fields:
+      {
+        "technicalAccuracy": <score 1-10>,
+        "problemSolving": <score 1-10>,
+        "communicationClarity": <score 1-10>,
+        "keyStrength": "<one specific technical strength from their answer>",
+        "technicalImprovement": "<one specific technical aspect they should improve>",
+        "followUpQuestion": "<a technical follow-up question based on their response>"
+      }
+      
+      The response must be valid JSON. Scores should reflect senior-level expectations.
+      `;
 
       const analysisResult = await model.generateContent({
         contents: [{ role: "user", parts: [{ text: analysisPrompt }] }]
       });
       
-      const analysisText = analysisResult.response.text().trim();
+      const analysisText = analysisResult.response.text();
       let analysis;
       
       try {
-        // Remove any potential markdown or code block markers
-        const cleanJson = analysisText.replace(/\`\`\`json|\`\`\`|\n/g, '').trim();
-        analysis = JSON.parse(cleanJson);
+        analysis = JSON.parse(analysisText);
         
         // Store the analysis in a more structured way
         session.answerAnalyses = session.answerAnalyses || [];
@@ -129,12 +133,11 @@ Scores should be between 1-10. Be objective and fair in scoring.`;
           scores: {
             technical: analysis.technicalAccuracy,
             problemSolving: analysis.problemSolving,
-            clarity: analysis.communicationClarity,
-            confidence: analysis.confidence
+            clarity: analysis.communicationClarity
           },
           strength: analysis.keyStrength,
           improvement: analysis.technicalImprovement,
-          relevanceToResume: analysis.relevanceToResume
+          followUp: analysis.followUpQuestion
         });
       } catch (parseError) {
         console.error('Error parsing analysis:', parseError);
@@ -142,46 +145,38 @@ Scores should be between 1-10. Be objective and fair in scoring.`;
           technicalAccuracy: 7,
           problemSolving: 7,
           communicationClarity: 7,
-          confidence: 7,
-          keyStrength: "Demonstrated basic technical knowledge",
-          technicalImprovement: "Could provide more specific implementation details",
-          relevanceToResume: "Partially aligned with stated experience"
+          keyStrength: "Demonstrated technical knowledge",
+          technicalImprovement: "Could provide more implementation details",
+          followUpQuestion: "Could you elaborate on the technical implementation?"
         };
       }
 
       // Check if this is the final question
       if (session.questionCount >= 7) {
-        // Generate final comprehensive report
-        const reportPrompt = `You are conducting a final evaluation of a technical interview.
-
-Interview Summary:
-${session.questions.map((q, i) => `
-Question ${i + 1}: ${q}
-Candidate's Answer: ${session.answers[i]}
-Technical Score: ${session.answerAnalyses[i]?.scores?.technical}/10
-Problem-Solving: ${session.answerAnalyses[i]?.scores?.problemSolving}/10
-Confidence: ${session.answerAnalyses[i]?.scores?.confidence}/10
-Key Strength: ${session.answerAnalyses[i]?.strength}
-`).join('\n')}
-
-Resume Context: ${session.resumeText}
-
-Provide a comprehensive evaluation in this exact JSON format (no markdown, no code blocks):
-{
-  "overallAssessment": "Detailed overall performance assessment",
-  "technicalStrengths": ["List 3-4 specific technical strengths demonstrated"],
-  "technicalWeaknesses": ["List 3-4 specific areas needing improvement"],
-  "communicationSkills": "Assessment of communication effectiveness",
-  "recommendedResources": ["3-4 specific learning resources or areas to focus on"],
-  "nextSteps": ["3-4 actionable steps for improvement"],
-  "questionByQuestion": [{
-    "questionNumber": 1,
-    "question": "Question text",
-    "answer": "Candidate's answer",
-    "feedback": "Specific feedback for this answer",
-    "score": 7
-  }]
-}`;
+        // Generate final report
+        const reportPrompt = `
+        You are an expert technical interviewer conducting a comprehensive technical evaluation.
+        
+        Interview Context:
+        ${session.questions.map((q, i) => `
+        Q${i + 1}: ${q}
+        A: ${session.answers[i] || "No answer recorded"}
+        Technical Score: ${session.answerAnalyses[i]?.scores?.technical || 'N/A'}/10
+        Problem-Solving: ${session.answerAnalyses[i]?.scores?.problemSolving || 'N/A'}/10
+        Key Strength: ${session.answerAnalyses[i]?.strength || 'N/A'}
+        `).join('\n')}
+        
+        Generate a detailed technical evaluation with:
+        1. Technical Proficiency Assessment (focus on demonstrated technical skills and knowledge)
+        2. System Design & Architecture Strengths (based on their technical decisions and explanations)
+        3. Technical Improvements Needed (specific technical areas to develop)
+        4. Technical Learning Recommendations (specific resources or areas to study)
+        
+        Format as JSON with keys: technicalAssessment, architectureStrengths, technicalImprovements, learningPath
+        
+        Focus ONLY on technical aspects, not soft skills.
+        Be specific about technologies, frameworks, and concepts mentioned.
+        `;
 
         const reportResult = await model.generateContent({
           contents: [{ role: "user", parts: [{ text: reportPrompt }] }]
@@ -189,23 +184,14 @@ Provide a comprehensive evaluation in this exact JSON format (no markdown, no co
         
         let report;
         try {
-          const cleanReport = reportResult.response.text().replace(/\`\`\`json|\`\`\`|\n/g, '').trim();
-          report = JSON.parse(cleanReport);
+          report = JSON.parse(reportResult.response.text());
         } catch (error) {
           console.error('Error parsing report:', error);
           report = {
-            overallAssessment: "Technical evaluation could not be generated",
-            technicalStrengths: ["Technical strengths analysis unavailable"],
-            technicalWeaknesses: ["Technical improvements analysis unavailable"],
-            recommendedResources: ["Learning recommendations unavailable"],
-            nextSteps: ["Please try the interview again"],
-            questionByQuestion: session.questions.map((q, i) => ({
-              questionNumber: i + 1,
-              question: q,
-              answer: session.answers[i] || "No answer recorded",
-              feedback: "Analysis unavailable",
-              score: 7
-            }))
+            technicalAssessment: "Technical evaluation could not be generated",
+            architectureStrengths: ["Technical strengths analysis unavailable"],
+            technicalImprovements: ["Technical improvements analysis unavailable"],
+            learningPath: ["Learning recommendations unavailable"]
           };
         }
 
@@ -217,27 +203,30 @@ Provide a comprehensive evaluation in this exact JSON format (no markdown, no co
         });
       }
 
-      // Generate next question based on resume and previous answers
-      const nextQuestionPrompt = `You are an expert technical interviewer conducting an interview.
-
-Resume Context: ${session.resumeText}
-
-Previous Questions and Answers:
-${session.questions.map((q, i) => `
-Q${i + 1}: ${q}
-A: ${session.answers[i] || "No answer recorded"}
-`).join('\n')}
-
-Generate the next interview question that:
-1. Is directly related to the candidate's resume and experience
-2. Builds naturally from previous questions and answers
-3. Is clear and concise (max 2 sentences)
-4. Is at an appropriate difficulty level (not too complex)
-5. Focuses on practical experience and problem-solving
-6. Avoids overly theoretical or abstract concepts
-
-The question should be specific to their background but easy to understand.
-Return ONLY the question text, nothing else.`;
+      // Generate next technical question
+      const nextQuestionPrompt = `
+      You are an expert technical interviewer conducting a deep technical interview.
+      
+      Context:
+      - Previous Question: ${session.questions[session.questionCount - 1]}
+      - Candidate's Answer: ${transcription}
+      - Technical Strengths: ${analysis.keyStrength}
+      - Areas to Probe: ${analysis.technicalImprovement}
+      
+      Generate the next technical interview question that:
+      1. Builds upon their previous answer
+      2. Probes deeper into their technical knowledge
+      3. Focuses on implementation details or system design
+      4. Is specific and requires technical depth
+      5. Is concise (max 2 sentences)
+      
+      DO NOT:
+      - Ask generic questions
+      - Repeat previous questions
+      - Ask about soft skills
+      
+      Return ONLY the question, nothing else.
+      `;
 
       const nextQuestionResult = await model.generateContent({
         contents: [{ role: "user", parts: [{ text: nextQuestionPrompt }] }]
