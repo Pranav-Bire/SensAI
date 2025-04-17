@@ -377,4 +377,3 @@ function createFallbackReport(session) {
     ]
   };
 } 
- 

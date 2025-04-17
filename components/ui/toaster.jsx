@@ -40,4 +40,3 @@ export function Toaster() {
     </div>
   );
 } 
- 

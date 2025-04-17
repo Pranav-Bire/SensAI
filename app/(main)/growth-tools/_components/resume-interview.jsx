@@ -243,16 +243,8 @@ const ResumeInterview = ({ userResume }) => {
   // Initialize media devices
   const initializeMedia = async () => {
     try {
-      // Don't recreate stream if we already have a valid one
-      if (mediaStream && mediaStream.active) {
-        // Just update UI state if stream is already active
-        setIsCameraEnabled(true);
-        setIsMicEnabled(true);
-        return mediaStream;
-      }
-      
-      // Clean up any existing inactive stream
       if (mediaStream) {
+        // Clean up existing stream if any
         mediaStream.getTracks().forEach(track => track.stop());
       }
       
@@ -261,7 +253,9 @@ const ResumeInterview = ({ userResume }) => {
         video: true,
         audio: {
           echoCancellation: true,
-          noiseSuppression: true
+          noiseSuppression: true,
+          sampleRate: 44100,
+          channelCount: 1
         }
       });
 
@@ -280,6 +274,15 @@ const ResumeInterview = ({ userResume }) => {
       setIsCameraEnabled(true);
       setIsMicEnabled(true);
 
+      // Test MediaRecorder
+      try {
+        const testRecorder = new MediaRecorder(stream);
+        testRecorder.stop();
+      } catch (error) {
+        console.error('MediaRecorder test failed:', error);
+        throw new Error('Your browser does not support audio recording');
+      }
+      
       showToast(
         'Media Access Granted',
         'Camera and microphone are now active.'
@@ -599,88 +602,71 @@ const ResumeInterview = ({ userResume }) => {
   // Start recording process
   const startRecordingProcess = async () => {
     try {
-      // Make sure we have an active media stream
+      // Check if we need to initialize media
       if (!mediaStream || !mediaStream.active) {
-        const stream = await initializeMedia();
-        if (!stream || !stream.active) {
-          throw new Error('Failed to initialize media stream');
-        }
+        await initializeMedia();
       }
 
       // Verify audio track is available and enabled
       const audioTrack = mediaStream.getAudioTracks()[0];
       if (!audioTrack || !audioTrack.enabled) {
-        throw new Error('Microphone is not available or is disabled');
+        throw new Error('Microphone is not available');
       }
 
-      // Use the simplest possible MediaRecorder setup to avoid browser compatibility issues
-      try {
-        // Create new MediaRecorder with minimal options
-        const recorder = new MediaRecorder(mediaStream);
-        
-        // Clear previous chunks
-        chunksRef.current = [];
+      // Create new MediaRecorder with basic settings
+      const recorder = new MediaRecorder(mediaStream);
+      
+      // Clear previous chunks
+      chunksRef.current = [];
 
-        // Set up event handlers
-        recorder.ondataavailable = (event) => {
-          if (event.data && event.data.size > 0) {
-            chunksRef.current.push(event.data);
-          }
-        };
+      // Set up event handlers
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          chunksRef.current.push(event.data);
+        }
+      };
 
-        recorder.onerror = (event) => {
-          console.error('MediaRecorder error:', event.error);
-          setIsRecording(false);
+      recorder.onerror = (event) => {
+        console.error('MediaRecorder error:', event.error);
+        setIsRecording(false);
+        showToast(
+          'Recording Error',
+          'An error occurred while recording',
+          'destructive'
+        );
+      };
+
+      recorder.onstop = async () => {
+        try {
+          const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+          await processAnswer(audioBlob);
+          chunksRef.current = [];
+        } catch (error) {
+          console.error('Error processing recording:', error);
           showToast(
-            'Recording Error',
-            'An error occurred while recording. Please try again.',
+            'Error',
+            'Failed to process recording',
             'destructive'
           );
-        };
+        }
+      };
 
-        recorder.onstop = async () => {
-          try {
-            // Create audio blob from recorded chunks
-            const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
-            
-            // Only process if we have data
-            if (audioBlob.size > 0) {
-              await processAnswer(audioBlob);
-            } else {
-              throw new Error('No audio data was recorded');
-            }
-            chunksRef.current = [];
-          } catch (error) {
-            console.error('Error processing recording:', error);
-            showToast(
-              'Error',
-              'Failed to process recording: ' + error.message,
-              'destructive'
-            );
-          }
-        };
+      // Store the recorder reference
+      mediaRecorderRef.current = recorder;
 
-        // Store the recorder reference
-        mediaRecorderRef.current = recorder;
+      // Start recording
+      recorder.start(1000); // Get data every second
+      setIsRecording(true);
 
-        // Start recording with 1-second chunks
-        recorder.start(1000);
-        setIsRecording(true);
+      // Start live transcription
+      setTimeout(() => {
+        toggleLiveTranscription(true);
+      }, 300);
 
-        // Start live transcription after a short delay
-        setTimeout(() => {
-          toggleLiveTranscription(true);
-        }, 300);
-
-      } catch (recorderError) {
-        console.error('MediaRecorder creation error:', recorderError);
-        throw new Error(`MediaRecorder not supported in your browser: ${recorderError.message}`);
-      }
     } catch (error) {
       console.error('Recording error:', error);
-      setIsRecording(false);
       showToast(
-        'Recording Error',
+        'Error',
         error.message || 'Failed to start recording',
         'destructive'
       );
@@ -703,16 +689,13 @@ const ResumeInterview = ({ userResume }) => {
         setIsTranscribing(false);
       }
 
-      // Clear the live transcript
-      setLiveTranscript('');
-      
-      // Start recording process
+      // Start recording after a short delay
       await startRecordingProcess();
     } catch (error) {
       console.error('Error in startRecording:', error);
       showToast(
         'Error',
-        'Failed to start recording: ' + error.message,
+        'Failed to start recording. Please try again.',
         'destructive'
       );
     }
@@ -817,6 +800,12 @@ const ResumeInterview = ({ userResume }) => {
         // Interview is complete, show the report
         setInterviewReport(data.report);
         setIsStarted(false);
+        
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(track => track.stop());
+        }
+        setIsCameraEnabled(false);
+        setIsMicEnabled(false);
         
         showToast(
           'Interview Complete',
@@ -1296,91 +1285,50 @@ const ResumeInterview = ({ userResume }) => {
             <div className="space-y-4">
               <h3 className="text-xl font-semibold">Interview Report</h3>
               <div className="space-y-6">
-                {/* Overall Assessment */}
                 <div>
-                  <h4 className="font-medium mb-2">Overall Assessment</h4>
-                  <p className="text-muted-foreground">{interviewReport.overallAssessment}</p>
-                </div>
-                
-                {/* Technical Strengths */}
-                <div>
-                  <h4 className="font-medium mb-2">Technical Strengths</h4>
-                  <ul className="list-disc list-inside space-y-1">
-                    {interviewReport.technicalStrengths?.map((strength, index) => (
-                      <li key={index} className="text-muted-foreground">{strength}</li>
-                    )) || (
-                      <li className="text-muted-foreground">No specific strengths identified</li>
-                    )}
-                  </ul>
-                </div>
-                
-                {/* Areas for Improvement */}
-                <div>
-                  <h4 className="font-medium mb-2">Areas for Improvement</h4>
-                  <ul className="list-disc list-inside space-y-1">
-                    {interviewReport.technicalWeaknesses?.map((weakness, index) => (
-                      <li key={index} className="text-muted-foreground">{weakness}</li>
-                    )) || (
-                      <li className="text-muted-foreground">No specific weaknesses identified</li>
-                    )}
-                  </ul>
-                </div>
-                
-                {/* Communication Skills */}
-                <div>
-                  <h4 className="font-medium mb-2">Communication Skills</h4>
-                  <p className="text-muted-foreground">{interviewReport.communicationSkills || "Not evaluated"}</p>
-                </div>
-                
-                {/* Recommended Resources */}
-                <div>
-                  <h4 className="font-medium mb-2">Recommended Learning Resources</h4>
-                  <ul className="list-disc list-inside space-y-1">
-                    {interviewReport.recommendedResources?.map((resource, index) => (
-                      <li key={index} className="text-muted-foreground">{resource}</li>
-                    )) || (
-                      <li className="text-muted-foreground">No specific resources recommended</li>
-                    )}
-                  </ul>
-                </div>
-                
-                {/* Next Steps */}
-                <div>
-                  <h4 className="font-medium mb-2">Next Steps</h4>
-                  <ul className="list-disc list-inside space-y-1">
-                    {interviewReport.nextSteps?.map((step, index) => (
-                      <li key={index} className="text-muted-foreground">{step}</li>
-                    )) || (
-                      <li className="text-muted-foreground">No specific next steps recommended</li>
-                    )}
-                  </ul>
+                  <h4 className="font-medium mb-2">Overall Performance</h4>
+                  <p className="text-muted-foreground">{interviewReport.overallPerformance}</p>
                 </div>
                 
                 {/* Question-by-question analysis */}
-                <div>
-                  <h4 className="font-medium mb-3">Question-by-Question Analysis</h4>
-                  <div className="space-y-4">
-                    {interviewReport.questionByQuestion?.map((item, i) => (
-                      <div key={i} className="border rounded-lg p-3">
-                        <p className="font-medium">Q{item.questionNumber}: {item.question}</p>
-                        <p className="text-sm mt-1 text-muted-foreground">Your answer: {item.answer}</p>
-                        <div className="mt-2">
-                          <span className="text-sm font-medium">Score: </span>
-                          <span className="text-sm">{item.score}/10</span>
+                {allAnalyses.length > 0 && (
+                  <div>
+                    <h4 className="font-medium mb-3">Question-by-Question Analysis</h4>
+                    <div className="space-y-4">
+                      {allAnalyses.map((item, i) => (
+                        <div key={i} className="border rounded-lg p-3">
+                          <p className="font-medium">Q{i+1}: {item.question}</p>
+                          <p className="text-sm mt-1 text-muted-foreground">Your answer: {item.answer}</p>
+                          {renderAnalysis(item.analysis)}
                         </div>
-                        <p className="text-sm mt-2">
-                          <span className="font-medium">Feedback: </span>
-                          {item.feedback}
-                        </p>
-                      </div>
-                    )) || allAnalyses.map((item, i) => (
-                      <div key={i} className="border rounded-lg p-3">
-                        <p className="font-medium">Q{i+1}: {item.question}</p>
-                        <p className="text-sm mt-1 text-muted-foreground">Your answer: {item.answer}</p>
-                        {renderAnalysis(item.analysis)}
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
+                )}
+                
+                <div>
+                  <h4 className="font-medium mb-2">Strengths</h4>
+                  <ul className="list-disc list-inside space-y-1">
+                    {interviewReport.strengths.map((strength, index) => (
+                      <li key={index} className="text-muted-foreground">{strength}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2">Areas for Improvement</h4>
+                  <ul className="list-disc list-inside space-y-1">
+                    {interviewReport.improvements.map((improvement, index) => (
+                      <li key={index} className="text-muted-foreground">{improvement}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2">Tips for Future Interviews</h4>
+                  <ul className="list-disc list-inside space-y-1">
+                    {interviewReport.tips.map((tip, index) => (
+                      <li key={index} className="text-muted-foreground">{tip}</li>
+                    ))}
+                  </ul>
                 </div>
               </div>
               <div className="flex justify-center gap-4 mt-6">

@@ -232,3 +232,4 @@ function getFromMemory(userId) {
   console.log(`Retrieved ${userJobs.length} jobs from memory storage for user ${userId}`);
   
   return [...userJobs].sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+} 

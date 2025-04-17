@@ -372,3 +372,5 @@ const JobDashboard = ({ userSkills = [], savedJobs = [] }) => {
     );
   }
 };
+
+export default JobDashboard; 

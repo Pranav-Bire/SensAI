@@ -93,4 +93,3 @@ Return ONLY the question text, nothing else.`;
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 } 
- 

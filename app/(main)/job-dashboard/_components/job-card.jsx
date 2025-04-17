@@ -289,17 +289,3 @@ export default function JobCard({ job, isSaved, onSaveToggle }) {
     </Card>
   );
 } 
-        <Button 
-          variant="outline" 
-          size="sm" 
-          asChild
-        >
-          <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center">
-            <ExternalLink className="h-3.5 w-3.5 mr-1" />
-            View
-          </a>
-        </Button>
-      </CardFooter>
-    </Card>
-  );
-} 

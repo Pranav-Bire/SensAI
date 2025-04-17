@@ -339,3 +339,4 @@ export async function improveWithAI({ current, type }) {
     console.error("Error improving content:", error.message);
     throw new Error("Failed to improve content");
   }
+}
