@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { fetchJobs, isUsingMockData } from "@/lib/services/jobService";
-import JobList from "@/components/jobs/JobList";
-import JobFilters from "@/components/jobs/JobFilters";
+// import JobList from "@/components/jobs/JobList";
+// import JobFilters from "@/components/jobs/JobFilters";
 import { AlertCircle } from "lucide-react";
 
 export default function JobDashboard() {
