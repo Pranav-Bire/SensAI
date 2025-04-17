@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useState } from "react";
 import { fetchJobs, isUsingMockData } from "@/lib/services/jobService";
 import JobList from "@/components/jobs/JobList";
