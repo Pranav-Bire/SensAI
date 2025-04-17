@@ -1,3 +1,0 @@
-# For Windows
-netstat -ano | findstr :8288
-netstat -ano | findstr :8289
