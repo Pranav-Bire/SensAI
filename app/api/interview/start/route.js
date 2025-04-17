@@ -63,15 +63,9 @@ Return ONLY the question text, nothing else.`;
         createdAt: new Date().toISOString()
       };
 
-      // Create response with session data
-      const response = NextResponse.json({
-        success: true,
-        sessionId,
-        question: firstQuestion
-      });
-
-      // Set session cookie directly on the response
-      response.cookies.set('interview_session', sessionId, {
+      // Set session cookie
+      const cookieStore = cookies();
+      cookieStore.set('interview_session', sessionId, {
         maxAge: 60 * 60, // 1 hour
         path: '/',
       });
@@ -79,7 +73,11 @@ Return ONLY the question text, nothing else.`;
       console.log('First question generated:', firstQuestion);
       console.log('Set interview_session cookie:', sessionId);
 
-      return response;
+      return NextResponse.json({
+        success: true,
+        sessionId,
+        question: firstQuestion
+      });
 
     } catch (error) {
       console.error('Error generating first question:', error);

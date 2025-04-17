@@ -96,8 +96,7 @@ Resume Context: ${session.resumeText}
 
 Analyze this response considering the candidate's resume and provide a structured evaluation.
 
-IMPORTANT: Return a valid JSON object with NO markdown formatting, NO code blocks, and NO backticks.
-The JSON should have these fields:
+Return ONLY a JSON object with these exact fields (no markdown, no code blocks, just the JSON):
 {
   "technicalAccuracy": 7,
   "problemSolving": 7,
@@ -114,29 +113,13 @@ Scores should be between 1-10. Be objective and fair in scoring.`;
         contents: [{ role: "user", parts: [{ text: analysisPrompt }] }]
       });
       
-      const rawAnalysisText = analysisResult.response.text();
-      let analysisText = rawAnalysisText;
+      const analysisText = analysisResult.response.text().trim();
       let analysis;
       
       try {
-        // Step 1: Try to extract JSON from markdown code blocks if present
-        const jsonMatch = rawAnalysisText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-        if (jsonMatch && jsonMatch[1]) {
-          analysisText = jsonMatch[1];
-        } else {
-          // Step 2: Remove any markdown formatting that might be present
-          analysisText = rawAnalysisText
-            .replace(/```json|```/g, '')  // Remove code block markers
-            .replace(/^[^{]*/, '')        // Remove any text before the first {
-            .replace(/[^}]*$/, '')        // Remove any text after the last }
-            .trim();
-        }
-        
-        // Log the cleaned JSON for debugging
-        console.log("Cleaned JSON:", analysisText.substring(0, 100) + "...");
-        
-        // Step 3: Parse the JSON
-        analysis = JSON.parse(analysisText);
+        // Remove any potential markdown or code block markers
+        const cleanJson = analysisText.replace(/\`\`\`json|\`\`\`|\n/g, '').trim();
+        analysis = JSON.parse(cleanJson);
         
         // Store the analysis in a more structured way
         session.answerAnalyses = session.answerAnalyses || [];
@@ -155,9 +138,6 @@ Scores should be between 1-10. Be objective and fair in scoring.`;
         });
       } catch (parseError) {
         console.error('Error parsing analysis:', parseError);
-        console.error('Raw response:', rawAnalysisText.substring(0, 200));
-        
-        // Create a fallback analysis
         analysis = {
           technicalAccuracy: 7,
           problemSolving: 7,
@@ -167,22 +147,6 @@ Scores should be between 1-10. Be objective and fair in scoring.`;
           technicalImprovement: "Could provide more specific implementation details",
           relevanceToResume: "Partially aligned with stated experience"
         };
-        
-        // Still store the analysis even if parsing failed
-        session.answerAnalyses = session.answerAnalyses || [];
-        session.answerAnalyses.push({
-          question: session.questions[session.questionCount - 1],
-          answer: transcription,
-          scores: {
-            technical: analysis.technicalAccuracy,
-            problemSolving: analysis.problemSolving,
-            clarity: analysis.communicationClarity,
-            confidence: analysis.confidence
-          },
-          strength: analysis.keyStrength,
-          improvement: analysis.technicalImprovement,
-          relevanceToResume: analysis.relevanceToResume
-        });
       }
 
       // Check if this is the final question
@@ -202,8 +166,7 @@ Key Strength: ${session.answerAnalyses[i]?.strength}
 
 Resume Context: ${session.resumeText}
 
-IMPORTANT: Return a valid JSON object with NO markdown formatting, NO code blocks, and NO backticks.
-The JSON should have this exact structure:
+Provide a comprehensive evaluation in this exact JSON format (no markdown, no code blocks):
 {
   "overallAssessment": "Detailed overall performance assessment",
   "technicalStrengths": ["List 3-4 specific technical strengths demonstrated"],
@@ -224,27 +187,12 @@ The JSON should have this exact structure:
           contents: [{ role: "user", parts: [{ text: reportPrompt }] }]
         });
         
-        const rawReportText = reportResult.response.text();
         let report;
         try {
-          // Extract JSON using the same approach as for analysis
-          let reportText = rawReportText;
-          const jsonMatch = rawReportText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-          if (jsonMatch && jsonMatch[1]) {
-            reportText = jsonMatch[1];
-          } else {
-            reportText = rawReportText
-              .replace(/```json|```/g, '')
-              .replace(/^[^{]*/, '')
-              .replace(/[^}]*$/, '')
-              .trim();
-          }
-          
-          report = JSON.parse(reportText);
+          const cleanReport = reportResult.response.text().replace(/\`\`\`json|\`\`\`|\n/g, '').trim();
+          report = JSON.parse(cleanReport);
         } catch (error) {
           console.error('Error parsing report:', error);
-          console.error('Raw report:', rawReportText.substring(0, 200));
-          
           report = {
             overallAssessment: "Technical evaluation could not be generated",
             technicalStrengths: ["Technical strengths analysis unavailable"],

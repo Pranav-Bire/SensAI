@@ -118,69 +118,55 @@ const ResumeInterview = ({ userResume }) => {
       return;
     }
 
-    try {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
 
-      recognition.onresult = (event) => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            transcript += event.results[i][0].transcript + ' ';
-          } else {
-            transcript += event.results[i][0].transcript;
-          }
+    recognition.onresult = (event) => {
+      let transcript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          transcript += event.results[i][0].transcript + ' ';
+        } else {
+          transcript += event.results[i][0].transcript;
         }
-        setLiveTranscript(transcript);
-      };
+      }
+      setLiveTranscript(transcript);
+    };
 
-      recognition.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
-        
-        // Don't show toast for no-speech error as it's common
-        if (event.error === 'not-allowed') {
-          showToast(
-            'Microphone Access Denied',
-            'Please enable microphone access to use live transcription.',
-            'destructive'
-          );
-        } else if (event.error !== 'no-speech') {
-          showToast(
-            'Speech Recognition Error',
-            `Error: ${event.error}. Falling back to audio recording only.`,
-            'default'
-          );
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      if (event.error === 'not-allowed') {
+        showToast(
+          'Microphone Access Denied',
+          'Please enable microphone access to use live transcription.',
+          'destructive'
+        );
+      }
+      // Don't keep trying to restart if there's an error
+      setIsTranscribing(false);
+    };
+
+    recognition.onend = () => {
+      console.log('Speech recognition ended');
+      // Only auto-restart if we're still in recording mode and no error occurred
+      if (isTranscribing) {
+        try {
+          setTimeout(() => {
+            if (isTranscribing && recognitionRef.current) {
+              recognitionRef.current.start();
+            }
+          }, 1000);
+        } catch (error) {
+          console.error('Error restarting recognition:', error);
+          setIsTranscribing(false);
         }
-        
-        // Continue recording even if speech recognition fails
-        setIsTranscribing(false);
-      };
+      }
+    };
 
-      recognition.onend = () => {
-        console.log('Speech recognition ended');
-        // Only auto-restart if we're still in recording mode and no error occurred
-        if (isTranscribing) {
-          try {
-            setTimeout(() => {
-              if (isTranscribing && recognitionRef.current) {
-                recognitionRef.current.start();
-              }
-            }, 1000);
-          } catch (error) {
-            console.error('Error restarting recognition:', error);
-            setIsTranscribing(false);
-          }
-        }
-      };
-
-      recognitionRef.current = recognition;
-    } catch (error) {
-      console.error('Error initializing speech recognition:', error);
-      setRecognitionSupported(false);
-    }
+    recognitionRef.current = recognition;
   };
 
   // Speak text using the browser's speech synthesis
@@ -254,7 +240,7 @@ const ResumeInterview = ({ userResume }) => {
     }
   }, [currentQuestion, isStarted]);
 
-  // Initialize media devices with more reliable constraints
+  // Initialize media devices
   const initializeMedia = async () => {
     try {
       if (mediaStream) {
@@ -262,10 +248,15 @@ const ResumeInterview = ({ userResume }) => {
         mediaStream.getTracks().forEach(track => track.stop());
       }
       
-      // Request media with basic constraints first
+      // Request media with specific audio constraints
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
-        audio: true
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100,
+          channelCount: 1
+        }
       });
 
       // Store the stream
@@ -282,6 +273,15 @@ const ResumeInterview = ({ userResume }) => {
       
       setIsCameraEnabled(true);
       setIsMicEnabled(true);
+
+      // Test MediaRecorder
+      try {
+        const testRecorder = new MediaRecorder(stream);
+        testRecorder.stop();
+      } catch (error) {
+        console.error('MediaRecorder test failed:', error);
+        throw new Error('Your browser does not support audio recording');
+      }
       
       showToast(
         'Media Access Granted',
@@ -407,90 +407,94 @@ const ResumeInterview = ({ userResume }) => {
 
   // Start the interview
   const startInterview = async () => {
-    setError("");
-    setStatusMessage("");
+    // Validate industry selection
+    if (!industry) {
+      setError("Please select an industry before starting the interview");
+      return;
+    }
+
     setIsLoading(true);
+    setError("");
+    setStatusMessage("Preparing your interview...");
     
     try {
-      // Clear previous state
-      setInterviewReport(null);
-      setCurrentAnalysis(null);
-      setAnswers([]);
-      setQuestions([]);
-      setAudioTranscript('');
-      setAllAnalyses([]);
-      setCurrentQuestionIndex(0);
-      setCurrentQuestion(null);
-      setSessionId(null);
-      setHasAnswered(false);
-      setShowNextButton(false);
-      
-      // Ensure we have resume text
-      if (!resumeText && !resumeFile) {
-        throw new Error('Please provide your resume to start the interview');
+      // If we have a resume but haven't analyzed it yet, analyze it first to get custom questions
+      if (resumeText && !resumeAnalyzed) {
+        setStatusMessage("Analyzing your resume for personalized questions...");
+        
+        try {
+          // Call the API to analyze the resume and get custom questions
+          const analyzeResponse = await fetch('/api/resume-interview/analyze', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              resumeText: resumeText,
+              industry: industry
+            }),
+          });
+          
+          if (!analyzeResponse.ok) {
+            console.warn(`Resume analysis failed: ${analyzeResponse.statusText}`);
+            // Continue with standard questions if analysis fails
+          } else {
+            const analyzeData = await analyzeResponse.json();
+            console.log("Resume analysis result:", analyzeData);
+            
+            if (analyzeData.questions && analyzeData.questions.length > 0) {
+              setResumeQuestions(analyzeData.questions);
+              setResumeAnalyzed(true);
+              console.log(`Generated ${analyzeData.questions.length} custom questions from resume`);
+            } else {
+              console.log("No custom questions generated from resume analysis");
+            }
+          }
+        } catch (analyzeError) {
+          console.error("Error analyzing resume:", analyzeError);
+          // Continue with interview even if analysis fails
+          // Don't set an error as we'll proceed with generic questions
+        }
       }
       
-      // Initialize media if not already done
-      if (!isCameraEnabled || !isMicEnabled) {
-        await initializeMedia();
-      }
-      
-      // If we have a file but no text yet, upload it first
-      if (resumeFile && !resumeText) {
-        await uploadResumeForInterview();
-      }
-      
-      // Start the interview with the resume text
-      console.log('Starting interview with resume text length:', resumeText.length);
-      
-      const response = await fetch('/api/interview/start', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          resumeText: resumeText,
-          industry: industry
-        })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to start interview');
-      }
-      
-      const data = await response.json();
-      console.log('Interview started successfully, session ID:', data.sessionId);
-      
-      // Set the first question and session ID
-      if (data.question && data.sessionId) {
+      // Now start the interview with any custom questions we have
+      setStatusMessage("Starting interview...");
+      try {
+        const response = await fetch('/api/interview/start', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            resumeText: resumeText,
+            industry: industry,
+            customQuestions: resumeQuestions
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Failed to start interview: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log("Interview started:", data);
+        
+        // Update state with the first question and session ID
+        setSessionId(data.sessionId);
         setCurrentQuestion(data.question);
         setQuestions([data.question]);
-        setSessionId(data.sessionId);
+        setAnswers([]);
+        setInterviewState('in-progress');
         setIsStarted(true);
-        
-        // Speak the first question if audio is enabled
-        if (isAudioEnabled) {
-          setTimeout(() => {
-            speakText(data.question);
-          }, 500);
-        }
-        
-        showToast(
-          'Interview Started',
-          'Answer the questions by clicking the Record button. You can re-record if needed.'
-        );
-      } else {
-        throw new Error('No question received from the server');
+        setStatusMessage("");
+      } catch (startError) {
+        console.error("Error starting interview:", startError);
+        throw startError; // Re-throw to be caught by the outer catch
       }
     } catch (error) {
-      console.error('Error starting interview:', error);
-      setError(error.message || 'Failed to start the interview');
-      showToast(
-        'Error',
-        error.message || 'Failed to start the interview. Please try again.',
-        'destructive'
-      );
+      console.error("Error starting interview process:", error);
+      setError(error.message || "Failed to start the interview. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -599,7 +603,7 @@ const ResumeInterview = ({ userResume }) => {
     }
   }, [isStarted, isCameraEnabled]);
 
-  // Improved recording process
+  // Start recording process
   const startRecordingProcess = async () => {
     try {
       // Check if we need to initialize media
@@ -613,31 +617,9 @@ const ResumeInterview = ({ userResume }) => {
         throw new Error('Microphone is not available');
       }
 
-      // Determine supported MIME type
-      const getMimeType = () => {
-        if (MediaRecorder.isTypeSupported('audio/webm')) {
-          return 'audio/webm';
-        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-          return 'audio/mp4';
-        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
-          return 'audio/ogg';
-        } else {
-          return '';  // Default - let browser choose
-        }
-      };
-
-      // Create MediaRecorder with simple options
-      const options = { mimeType: getMimeType() };
-      console.log('Using MIME type:', options.mimeType || 'browser default');
+      // Create new MediaRecorder with basic settings
+      const recorder = new MediaRecorder(mediaStream);
       
-      let recorder;
-      try {
-        recorder = new MediaRecorder(mediaStream, options);
-      } catch (err) {
-        console.error('Failed to create MediaRecorder with options, trying without options:', err);
-        recorder = new MediaRecorder(mediaStream);
-      }
-        
       // Clear previous chunks
       chunksRef.current = [];
 
@@ -660,25 +642,14 @@ const ResumeInterview = ({ userResume }) => {
 
       recorder.onstop = async () => {
         try {
-          if (chunksRef.current.length === 0) {
-            throw new Error('No audio data was recorded');
-          }
-          
-          // Create audio blob with the best supported format
-          const mimeType = getMimeType() || 'audio/webm';
-          const audioBlob = new Blob(chunksRef.current, { type: mimeType });
-          
-          if (audioBlob.size < 100) {
-            console.warn('Audio blob is suspiciously small:', audioBlob.size, 'bytes');
-          }
-          
+          const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
           await processAnswer(audioBlob);
           chunksRef.current = [];
         } catch (error) {
           console.error('Error processing recording:', error);
           showToast(
             'Error',
-            'Failed to process recording: ' + error.message,
+            'Failed to process recording',
             'destructive'
           );
         }
@@ -687,10 +658,9 @@ const ResumeInterview = ({ userResume }) => {
       // Store the recorder reference
       mediaRecorderRef.current = recorder;
 
-      // Start recording with a shorter timeslice for more frequent ondataavailable events
-      recorder.start(500);
+      // Start recording
+      recorder.start(1000); // Get data every second
       setIsRecording(true);
-      console.log('MediaRecorder started successfully');
 
       // Start live transcription
       setTimeout(() => {
@@ -699,155 +669,59 @@ const ResumeInterview = ({ userResume }) => {
 
     } catch (error) {
       console.error('Recording error:', error);
-      setIsRecording(false);
       showToast(
-        'Recording Error',
+        'Error',
         error.message || 'Failed to start recording',
         'destructive'
       );
     }
   };
 
-  // Enhanced processAnswer function to ensure fields are properly mapped
-  const processAnswer = async (audioBlob) => {
-    setIsLoading(true);
-    setCurrentAnalysis(null);
-    
-    const currentTranscriptValue = liveTranscript;
-    setLiveTranscript('');
-    
+  // Update startRecording to handle the process better
+  const startRecording = async () => {
+    if (isRecording) return;
+
     try {
-      const formData = new FormData();
-      formData.append('audio', audioBlob);
-      
-      // Make sure to include the transcript
-      if (currentTranscriptValue) {
-        formData.append('liveTranscript', currentTranscriptValue);
-      } else {
-        // If no transcript, add a placeholder
-        formData.append('liveTranscript', 'No transcription available');
+      // Stop any ongoing speech synthesis
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
       }
 
-      // Always include sessionId
-      if (sessionId) {
-        formData.append('sessionId', sessionId);
-      } else {
-        throw new Error('No session ID available');
+      // Stop any existing transcription
+      if (recognitionRef.current && isTranscribing) {
+        recognitionRef.current.stop();
+        setIsTranscribing(false);
       }
 
-      console.log(`Submitting answer for question ${currentQuestionIndex + 1}`);
-      
-      const response = await fetch('/api/interview/process-answer', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to process answer');
-      }
-
-      const data = await response.json();
-      
-      // Log successful answer processing
-      console.log(`Answer processed successfully for question ${currentQuestionIndex + 1}`);
-      console.log('Received analysis:', data.analysis);
-      
-      // Always use the transcript from the response or the current one
-      const finalTranscript = data.transcription || currentTranscriptValue || "No transcription available";
-      
-      // Store the answer locally even if already stored on server
-      setAnswers(prev => [...prev, finalTranscript]); 
-      setAudioTranscript(finalTranscript);
-      
-      // Process and map the analysis data with defaults for missing fields
-      if (data.analysis) {
-        // Map fields correctly and provide defaults for missing ones
-        const mappedAnalysis = {
-          accuracy: data.analysis.technicalAccuracy || 7,
-          problemSolving: data.analysis.problemSolving || 7,
-          clarity: data.analysis.communicationClarity || 7,
-          confidence: data.analysis.confidence || 7,
-          strength: data.analysis.keyStrength || "Technical knowledge demonstrated",
-          improvement: data.analysis.technicalImprovement || "Could provide more specific details",
-          relevanceToResume: data.analysis.relevanceToResume || "Somewhat relevant to stated experience"
-        };
-        
-        setCurrentAnalysis(mappedAnalysis);
-        setAllAnalyses(prev => [...prev, {
-          question: currentQuestion,
-          answer: finalTranscript,
-          analysis: mappedAnalysis
-        }]);
-      }
-      
-      if (data.isComplete) {
-        // Interview is complete, show the report
-        setInterviewReport(data.report);
-        setIsStarted(false);
-        
-        if (mediaStream) {
-          mediaStream.getTracks().forEach(track => track.stop());
-        }
-        setIsCameraEnabled(false);
-        setIsMicEnabled(false);
-        
-        showToast(
-          'Interview Complete',
-          'Your interview has been completed successfully. View your report below.'
-        );
-      } else {
-        // Store next question but don't display it yet
-        const nextQuestion = data.nextQuestion;
-        console.log(`Received next question: ${nextQuestion}`);
-        setQuestions(prev => [...prev, nextQuestion]);
-        setShowNextButton(true);
-      }
-
-      setHasAnswered(true);
-      setIsLoading(false);
+      // Start recording after a short delay
+      await startRecordingProcess();
     } catch (error) {
-      console.error('Error processing answer:', error);
-      setIsLoading(false);
+      console.error('Error in startRecording:', error);
       showToast(
         'Error',
-        error.message || 'Failed to process your answer. Please try again.',
+        'Failed to start recording. Please try again.',
         'destructive'
       );
     }
   };
 
-  // Handle next question with proper state updates
-  const handleNextQuestion = () => {
-    const nextIndex = currentQuestionIndex + 1;
-    console.log(`Moving to question ${nextIndex + 1}`);
-    
-    // Make sure we have the question at this index
-    if (questions[nextIndex]) {
-      setCurrentQuestionIndex(nextIndex);
-      setCurrentQuestion(questions[nextIndex]);
-      setHasAnswered(false);
-      setShowNextButton(false);
-      setCurrentAnalysis(null);
-      setLiveTranscript('');
+  // Update stopRecording to also stop live transcription
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
       
-      // Speak the new question if audio is enabled
-      if (isAudioEnabled) {
-        setTimeout(() => {
-          speakText(questions[nextIndex]);
-        }, 500);
-      }
-    } else {
-      console.error(`Question at index ${nextIndex} is not available`);
+      // Stop live transcription but keep the final transcript
+      toggleLiveTranscription(false);
+      
       showToast(
-        'Error',
-        'The next question is not available. Please try again.',
-        'destructive'
+        'Recording Stopped',
+        'Processing your answer...'
       );
     }
   };
 
-  // Cleanup
+  // Clean up recognition on unmount
   useEffect(() => {
     return () => {
       if (recognitionRef.current) {
@@ -864,6 +738,97 @@ const ResumeInterview = ({ userResume }) => {
       }
     };
   }, [mediaStream, isTranscribing]);
+
+  // Process the answer and get next question
+  const processAnswer = async (audioBlob) => {
+    setIsLoading(true);
+    setCurrentAnalysis(null);
+    
+    const currentTranscriptValue = liveTranscript;
+    setLiveTranscript('');
+    
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob);
+      formData.append('questionIndex', currentQuestionIndex);
+      
+      if (currentTranscriptValue) {
+        formData.append('liveTranscript', currentTranscriptValue);
+      }
+
+      if (sessionId) {
+        formData.append('sessionId', sessionId);
+      }
+
+      const response = await fetch('/api/interview/process-answer', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Failed to process answer');
+
+      const data = await response.json();
+      
+      const finalTranscript = data.transcription || currentTranscriptValue || "No transcription available";
+      setAnswers(prev => [...prev, finalTranscript]); 
+      setAudioTranscript(finalTranscript);
+      
+      if (data.analysis) {
+        setCurrentAnalysis(data.analysis);
+        setAllAnalyses(prev => [...prev, {
+          question: currentQuestion,
+          answer: finalTranscript,
+          analysis: data.analysis
+        }]);
+      }
+      
+      if (data.isComplete) {
+        setInterviewReport(data.report);
+        setIsStarted(false);
+        
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(track => track.stop());
+        }
+        setIsCameraEnabled(false);
+        setIsMicEnabled(false);
+      } else {
+        // Store next question but don't display it yet
+        const nextQuestion = data.nextQuestion;
+        setQuestions(prev => [...prev, nextQuestion]);
+        setShowNextButton(true);
+      }
+
+      setHasAnswered(true);
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error processing answer:', error);
+      setIsLoading(false);
+      showToast(
+        'Error',
+        'Failed to process your answer. Please try again.',
+        'destructive'
+      );
+    }
+  };
+
+  // Handle next question
+  const handleNextQuestion = () => {
+    setCurrentQuestionIndex(prev => prev + 1);
+    setCurrentQuestion(questions[currentQuestionIndex + 1]);
+    setHasAnswered(false);
+    setShowNextButton(false);
+    setCurrentAnalysis(null);
+    setLiveTranscript('');
+  };
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [mediaStream]);
 
   // Toggle camera
   const toggleCamera = () => {
@@ -920,14 +885,6 @@ const ResumeInterview = ({ userResume }) => {
   const renderAnalysis = (analysis) => {
     if (!analysis) return null;
     
-    // Ensure we have correct field mapping
-    const accuracy = analysis.accuracy || analysis.technicalAccuracy || 7;
-    const problemSolving = analysis.problemSolving || 7;
-    const clarity = analysis.clarity || analysis.communicationClarity || 7;
-    const confidence = analysis.confidence || 7;
-    const strength = analysis.strength || analysis.keyStrength || "Not available";
-    const improvement = analysis.improvement || analysis.technicalImprovement || "Not available";
-    
     return (
       <div className="mt-4 p-4 bg-primary/5 rounded-lg border border-primary/20">
         <h4 className="font-medium mb-3 flex items-center">
@@ -938,39 +895,31 @@ const ResumeInterview = ({ userResume }) => {
         <div className="space-y-3">
           <div>
             <div className="flex justify-between text-sm mb-1">
-              <span>Technical Accuracy</span>
-              <span>{accuracy}/10</span>
+              <span>Confidence</span>
+              <span>{analysis.confidence}/10</span>
             </div>
-            <Progress value={accuracy * 10} className="h-2" />
+            <Progress value={analysis.confidence * 10} className="h-2" />
           </div>
           
           <div>
             <div className="flex justify-between text-sm mb-1">
-              <span>Problem Solving</span>
-              <span>{problemSolving}/10</span>
+              <span>Technical Accuracy</span>
+              <span>{analysis.accuracy}/10</span>
             </div>
-            <Progress value={problemSolving * 10} className="h-2" />
+            <Progress value={analysis.accuracy * 10} className="h-2" />
           </div>
           
           <div>
             <div className="flex justify-between text-sm mb-1">
               <span>Communication Clarity</span>
-              <span>{clarity}/10</span>
+              <span>{analysis.clarity}/10</span>
             </div>
-            <Progress value={clarity * 10} className="h-2" />
-          </div>
-          
-          <div>
-            <div className="flex justify-between text-sm mb-1">
-              <span>Confidence</span>
-              <span>{confidence}/10</span>
-            </div>
-            <Progress value={confidence * 10} className="h-2" />
+            <Progress value={analysis.clarity * 10} className="h-2" />
           </div>
           
           <div className="pt-2">
-            <p className="text-sm"><span className="font-medium">Strength:</span> {strength}</p>
-            <p className="text-sm mt-1"><span className="font-medium">Improvement:</span> {improvement}</p>
+            <p className="text-sm"><span className="font-medium">Strength:</span> {analysis.strength}</p>
+            <p className="text-sm mt-1"><span className="font-medium">Improvement:</span> {analysis.improvement}</p>
           </div>
         </div>
       </div>
@@ -1015,50 +964,6 @@ const ResumeInterview = ({ userResume }) => {
       'Interview Ended',
       'Camera and microphone have been turned off.'
     );
-  };
-
-  // Update startRecording to handle the process better
-  const startRecording = async () => {
-    if (isRecording) return;
-
-    try {
-      // Stop any ongoing speech synthesis
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
-
-      // Stop any existing transcription
-      if (recognitionRef.current && isTranscribing) {
-        recognitionRef.current.stop();
-        setIsTranscribing(false);
-      }
-
-      // Start recording after a short delay
-      await startRecordingProcess();
-    } catch (error) {
-      console.error('Error in startRecording:', error);
-      showToast(
-        'Error',
-        'Failed to start recording. Please try again.',
-        'destructive'
-      );
-    }
-  };
-
-  // Update stopRecording to also stop live transcription
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      
-      // Stop live transcription but keep the final transcript
-      toggleLiveTranscription(false);
-      
-      showToast(
-        'Recording Stopped',
-        'Processing your answer...'
-      );
-    }
   };
 
   return (
