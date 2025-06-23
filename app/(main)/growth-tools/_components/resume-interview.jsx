@@ -607,29 +607,24 @@ const ResumeInterview = ({ userResume }) => {
   const startRecordingProcess = async () => {
     try {
       // Check if we need to initialize media
-      if (!mediaStream || !mediaStream.active) {
-        await initializeMedia();
+      let stream = mediaStream;
+      if (!stream || !stream.active) {
+        stream = await initializeMedia();
+        setMediaStream(stream); // ensure state is updated for UI
       }
-
       // Verify audio track is available and enabled
-      const audioTrack = mediaStream.getAudioTracks()[0];
+      const audioTrack = stream.getAudioTracks()[0];
       if (!audioTrack || !audioTrack.enabled) {
         throw new Error('Microphone is not available');
       }
-
-      // Create new MediaRecorder with basic settings
-      const recorder = new MediaRecorder(mediaStream);
-      
-      // Clear previous chunks
+      // Create new MediaRecorder with the correct stream
+      const recorder = new MediaRecorder(stream);
       chunksRef.current = [];
-
-      // Set up event handlers
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
           chunksRef.current.push(event.data);
         }
       };
-
       recorder.onerror = (event) => {
         console.error('MediaRecorder error:', event.error);
         setIsRecording(false);
@@ -639,7 +634,6 @@ const ResumeInterview = ({ userResume }) => {
           'destructive'
         );
       };
-
       recorder.onstop = async () => {
         try {
           const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
@@ -654,19 +648,12 @@ const ResumeInterview = ({ userResume }) => {
           );
         }
       };
-
-      // Store the recorder reference
       mediaRecorderRef.current = recorder;
-
-      // Start recording
-      recorder.start(1000); // Get data every second
+      recorder.start(1000);
       setIsRecording(true);
-
-      // Start live transcription
       setTimeout(() => {
         toggleLiveTranscription(true);
       }, 300);
-
     } catch (error) {
       console.error('Recording error:', error);
       showToast(
@@ -1237,6 +1224,13 @@ const ResumeInterview = ({ userResume }) => {
               
               {/* Analysis display */}
               {currentAnalysis && hasAnswered && renderAnalysis(currentAnalysis)}
+
+              {isLoading && hasAnswered && !showNextButton && (
+                <div className="flex justify-center mt-4">
+                  <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                  <span>Loading next question...</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -1308,4 +1302,4 @@ const ResumeInterview = ({ userResume }) => {
   );
 };
 
-export default ResumeInterview; 
+export default ResumeInterview;

@@ -2,7 +2,7 @@
 import * as React from "react";
 
 const TOAST_LIMIT = 5;
-const TOAST_REMOVE_DELAY = 1000000;
+const TOAST_REMOVE_DELAY = 3000; // 3 seconds for auto-dismiss
 
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -152,4 +152,4 @@ function useToast() {
   };
 }
 
-export { useToast, toast }; 
+export { useToast, toast };
